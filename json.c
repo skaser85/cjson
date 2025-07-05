@@ -38,7 +38,25 @@ typedef struct {
   Token *items;
   size_t capacity;
   size_t count;
+  size_t current_token;
 } Tokens;
+
+typedef struct {
+  char **items;
+  size_t capacity;
+  size_t count;
+} Items;
+
+typedef struct {
+  char *key;
+  char *value;
+} KV;
+
+typedef struct {
+  KV *items;
+  size_t capacity;
+  size_t count;
+} Data;
 
 bool is_alpha(char c) {
   return ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'));
@@ -106,15 +124,131 @@ Tokens Tokenize(Nob_String_Builder sb) {
   return tokens;
 }
 
+Token get_empty_token() {
+  Token t = {0};
+  t.kind = TK_NONE;
+  return t;
+}
+
+bool expect_token(Token t, TOKEN_KIND kind) {
+  if (t.kind != kind) {
+    nob_log(NOB_ERROR, "Expected %s but got %s", GetKind(kind), GetKind(t.kind));
+    return false;
+  }
+  return true;
+}
+
+Token get_next_token(Tokens *tokens) {
+  Token t = tokens->items[tokens->current_token];
+  tokens->current_token += 1;
+  if (tokens->current_token >= tokens->count)
+    return get_empty_token();
+  return t;
+}
+
+Token peek(Tokens *tokens, size_t count) {
+  size_t num = tokens->current_token + count - 1;
+  if (num < tokens->count) {
+    return tokens->items[num];
+  }
+  return get_empty_token();
+}
+
+char *get_next_key(Tokens *tokens) {
+  Token t = get_next_token(tokens);
+  while (tokens->current_token > 0 && t.kind != TK_NONE) {
+    if (t.kind == TK_DOUBLE_QUOTE) {
+      t = get_next_token(tokens);
+      Token t2 = peek(tokens, 2);
+      if (t2.kind == TK_COLON)
+        return t.text;
+    }
+    t = get_next_token(tokens);
+  }
+  return NULL;
+}
+
+char *get_next_value(Tokens *tokens) {
+  Token t = get_next_token(tokens);
+  while (tokens->current_token > 0 && t.kind != TK_NONE) {
+    if (t.kind == TK_DOUBLE_QUOTE) {
+      t = get_next_token(tokens);
+      Token t2 = peek(tokens, 2);
+      if (t2.kind == TK_COMMA || t2.kind == TK_CLOSE_CURLY_BRACE)
+        return t.text;
+    }
+    t = get_next_token(tokens);
+  }
+  return NULL;
+}
+
+Items get_keys(Tokens *tokens) {
+  tokens->current_token = 0;
+  Items items = {0};
+  char *key = get_next_key(tokens);
+  while (key) {
+    nob_da_append(&items, key);
+    key = get_next_key(tokens);
+  }
+  return items;
+}
+
+Items get_values(Tokens *tokens) {
+  tokens->current_token = 0;
+  Items items = {0};
+  char *value = get_next_value(tokens);
+  while (value) {
+    nob_da_append(&items, value);
+    value = get_next_value(tokens);
+  }
+  return items;
+}
+
+
+Data get_data(Tokens *tokens) {
+  Data data = {0};
+  
+  Items keys = get_keys(tokens);
+  Items values = get_values(tokens);
+  assert (keys.count == values.count);
+  for (size_t i = 0; i < keys.count; ++i) {
+    KV kv = {0};
+    kv.key = keys.items[i];
+    kv.value = values.items[i];
+    nob_da_append(&data, kv);
+  }
+  return data;
+}
+
+void test(Tokens *tokens) {
+  tokens->current_token = 0;
+
+  char *key = get_next_key(tokens);
+  while (key) {
+    nob_log(NOB_INFO, "%s", key);
+    key = get_next_key(tokens);
+  }
+
+}
+
 int main() {
 
-  const char *filePath = "./nasa.json";
+  const char *filePath = "./data/nasa.json";
 
   Nob_String_Builder sb = {0};
   if (!nob_read_entire_file(filePath, &sb)) return 1;
 
   Tokens tokens = Tokenize(sb);
+  //test(&tokens);
+  Data data = get_data(&tokens);
+  for (size_t i = 0; i < data.count; ++i) {
+    KV kv = data.items[i];
+    nob_log(NOB_INFO, "KEY: %s", kv.key);
+    nob_log(NOB_INFO, "VALUE: %s", kv.value);
+    nob_log(NOB_INFO, "--------------------------");
+  }
 
+#if 0
   for (size_t i = 0; i < tokens.count; ++i) {
     Token t = tokens.items[i];
     nob_log(NOB_INFO, "KIND: %s", GetKind(t.kind));
@@ -123,6 +257,7 @@ int main() {
     }
     nob_log(NOB_INFO, "-------------------------");
   }
+#endif
 
   return 0;
 }
