@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 #define NOB_IMPLEMENTATION
 #include "./nob.h"
@@ -8,30 +9,36 @@ typedef enum {
 
   TK_OPEN_CURLY_BRACE,
   TK_CLOSE_CURLY_BRACE,
-  TK_DOUBLE_QUOTE,
+  TK_OPEN_SQ_BRACKET,
+  TK_CLOSE_SQ_BRACKET,
   TK_COLON,
   TK_COMMA,
+  
   TK_STRING,
+  TK_FLOAT,
 
   TK_COUNT
-} TOKEN_KIND;
+} Token_Kind;
 
-const char *GetKind(TOKEN_KIND kind) {
+const char *GetKind(Token_Kind kind) {
   switch (kind) {
     case TK_NONE: return "NONE";
     case TK_OPEN_CURLY_BRACE: return "{";
     case TK_CLOSE_CURLY_BRACE: return "}";
-    case TK_DOUBLE_QUOTE: return "\"";
+    case TK_OPEN_SQ_BRACKET: return "[";
+    case TK_CLOSE_SQ_BRACKET: return "]";
     case TK_COLON: return ":";
     case TK_COMMA: return ",";
     case TK_STRING: return "STRING";
+    case TK_FLOAT: return "FLOAT";
     default: return "";
   }
 }
 
 typedef struct {
-  TOKEN_KIND kind;
+  Token_Kind kind;
   char *text;
+  float num;
 } Token;
 
 typedef struct {
@@ -70,8 +77,8 @@ bool is_alpha_numeric(char c) {
   return is_alpha(c) || is_integer(c);
 }
 
-bool is_valid_char_for_text(char c) {
-  return (c != '"') && (c >= 32 && c <= 126);
+bool is_valid_char_for_string(char c) {
+  return c >= 32 && c <= 126;
 }
 
 Token GetToken(Nob_String_Builder sb, size_t *At) {
@@ -79,29 +86,102 @@ Token GetToken(Nob_String_Builder sb, size_t *At) {
   t.kind = TK_NONE;
   while (*At < sb.count) {
     char c = sb.items[*At];
-    if (is_alpha_numeric(c)) {
-      char *buffer = malloc(sizeof(char)*2048);
-      size_t idx = 0;
-      while (*At < sb.count && is_valid_char_for_text(c)) {
-        buffer[idx] = c;
-        idx += 1;
+    switch (c) {
+      case '{': t.kind = TK_OPEN_CURLY_BRACE; break;
+      case '}': t.kind = TK_CLOSE_CURLY_BRACE; break;
+      case '[': t.kind = TK_OPEN_SQ_BRACKET; break;
+      case ']': t.kind = TK_CLOSE_SQ_BRACKET; break;
+      case ':': t.kind = TK_COLON; break;
+      case ',': t.kind = TK_COMMA; break;
+      // if newline, just skip over the character
+      case '\r':
+      case '\n': break;
+      case '"': {
         *At += 1;
         c = sb.items[*At];
-      }
-      if (c == '"')
-        *At -= 1;
-      t.kind = TK_STRING;
-      t.text = strdup(buffer);
-    } else {
-      switch (c) {
-        case '{': t.kind = TK_OPEN_CURLY_BRACE; break;
-        case '}': t.kind = TK_CLOSE_CURLY_BRACE; break;
-        case '"': t.kind = TK_DOUBLE_QUOTE; break;
-        case ':': t.kind = TK_COLON; break;
-        case ',': t.kind = TK_COMMA; break;
-        // if newline, just skip over the character
-        case '\r':
-        case '\n': break;
+        char *buffer = malloc(sizeof(char)*2048);
+        size_t idx = 0;
+        while (*At < sb.count && is_valid_char_for_string(c)) {
+          if (c == '\\') {
+            if (*At + 1 < sb.count && sb.items[*At+1] == '"') {
+              buffer[idx] = c;
+              idx += 1;
+              *At += 1;
+              c = sb.items[*At];
+            }
+          } else if (c == '"') {
+              break;
+          }
+          buffer[idx] = c;
+          idx += 1;
+          *At += 1;
+          c = sb.items[*At];
+        }
+        t.kind = TK_STRING;
+        t.text = buffer;
+      } break;
+      default: {
+        bool is_numeric = false;
+        char *buffer = malloc(sizeof(char)*2048);
+        size_t idx = 0;
+
+          /*check for positive whole number*/
+        if (is_integer(c)) {
+          is_numeric = true;
+        } else if 
+          /*check for negative float without initial 0*/
+          (c == '-' && (
+                    (*At+1 < sb.count && sb.items[*At+1] == '.') &&
+                    (*At+2 < sb.count && is_integer(sb.items[*At+2]))
+                  )) {
+          is_numeric = true;
+          buffer[idx] = c;
+          *At += 1;
+          idx += 1;
+          c = sb.items[*At];
+          buffer[idx] = c;
+          *At += 1;
+          idx += 1;
+          c = sb.items[*At];
+        } else if
+          /*check for negative whole number*/
+          (c == '-' && (*At+1 < sb.count && is_integer(sb.items[*At+1]))) {
+          is_numeric = true;
+          buffer[idx] = c;
+          *At += 1;
+          idx += 1;
+          c = sb.items[*At];
+        } else if 
+          /*check for positive float without initial 0*/
+          (c == '.' && (*At+1 < sb.count && is_integer(sb.items[*At+1]))) {
+          is_numeric = true;
+          buffer[idx] = c;
+          *At += 1;
+          idx += 1;
+          c = sb.items[*At];
+        }
+
+        if (is_numeric) {
+          char *buffer = malloc(sizeof(char)*2048);
+          size_t idx = 0;
+          while (*At < sb.count && 
+                  (
+                    is_integer(c) ||
+                    (
+                      c == '.' && *At+1 < sb.count && is_integer(sb.items[*At+1])
+                    )
+                  )
+                ) {
+            buffer[idx] = c;
+            idx += 1;
+            *At += 1;
+            c = sb.items[*At];
+          }
+          if (c == ',')
+            *At -= 1;
+          t.kind = TK_FLOAT;
+          t.num = (float)atof(buffer);
+        }
       }
     }
     
@@ -130,7 +210,7 @@ Token get_empty_token() {
   return t;
 }
 
-bool expect_token(Token t, TOKEN_KIND kind) {
+bool expect_token(Token t, Token_Kind kind) {
   if (t.kind != kind) {
     nob_log(NOB_ERROR, "Expected %s but got %s", GetKind(kind), GetKind(t.kind));
     return false;
@@ -153,35 +233,7 @@ Token peek(Tokens *tokens, size_t count) {
   }
   return get_empty_token();
 }
-
-char *get_next_key(Tokens *tokens) {
-  Token t = get_next_token(tokens);
-  while (tokens->current_token > 0 && t.kind != TK_NONE) {
-    if (t.kind == TK_DOUBLE_QUOTE) {
-      t = get_next_token(tokens);
-      Token t2 = peek(tokens, 2);
-      if (t2.kind == TK_COLON)
-        return t.text;
-    }
-    t = get_next_token(tokens);
-  }
-  return NULL;
-}
-
-char *get_next_value(Tokens *tokens) {
-  Token t = get_next_token(tokens);
-  while (tokens->current_token > 0 && t.kind != TK_NONE) {
-    if (t.kind == TK_DOUBLE_QUOTE) {
-      t = get_next_token(tokens);
-      Token t2 = peek(tokens, 2);
-      if (t2.kind == TK_COMMA || t2.kind == TK_CLOSE_CURLY_BRACE)
-        return t.text;
-    }
-    t = get_next_token(tokens);
-  }
-  return NULL;
-}
-
+/*
 Items get_keys(Tokens *tokens) {
   tokens->current_token = 0;
   Items items = {0};
@@ -203,7 +255,6 @@ Items get_values(Tokens *tokens) {
   }
   return items;
 }
-
 
 Data get_data(Tokens *tokens) {
   Data data = {0};
@@ -230,30 +281,34 @@ void test(Tokens *tokens) {
   }
 
 }
+*/
 
 int main() {
 
-  const char *filePath = "./data/nasa.json";
-
+  //const char *filePath = "./data/nasa.json";
+  const char *filePath = "./data/weather.json";
+  
   Nob_String_Builder sb = {0};
   if (!nob_read_entire_file(filePath, &sb)) return 1;
 
   Tokens tokens = Tokenize(sb);
   //test(&tokens);
-  Data data = get_data(&tokens);
+  /*Data data = get_data(&tokens);
   for (size_t i = 0; i < data.count; ++i) {
     KV kv = data.items[i];
     nob_log(NOB_INFO, "KEY: %s", kv.key);
     nob_log(NOB_INFO, "VALUE: %s", kv.value);
     nob_log(NOB_INFO, "--------------------------");
-  }
+  }*/
 
-#if 0
+#if 1
   for (size_t i = 0; i < tokens.count; ++i) {
     Token t = tokens.items[i];
     nob_log(NOB_INFO, "KIND: %s", GetKind(t.kind));
     if (t.text && strlen(t.text) > 0) {
       nob_log(NOB_INFO, "%s", t.text);
+    } if (t.num > 0) {
+      nob_log(NOB_INFO, "%f", t.num);
     }
     nob_log(NOB_INFO, "-------------------------");
   }
