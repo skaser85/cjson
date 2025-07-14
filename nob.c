@@ -19,18 +19,20 @@ int main(int argc, char **argv)
 
     //nob_cmd_append(&cmd, "cc", "-ggdb", "-Wall", "-Wextra", "-o", BUILD_FOLDER"main", SRC_FOLDER"main.c");
     //nob_cmd_append(&cmd, "-lraylib", "-lGL", "-lm", "-lpthread", "-ldl", "-lrt", "-lX11");
-    
+
     nob_cmd_append(&cmd, "cc", "-ggdb", "-Wall", "-Wextra", "-o", "cjson", "json.c");
-    
+
     // nob_cmd_run_sync_and_reset() resets the cmd for you automatically
     if (!nob_cmd_run_sync_and_reset(&cmd)) return 1;
-    
+
     if (argc > 0) {
-      const char* param = nob_shift(argv, argc);
-      if (strcmp(param, "run") == 0) {
-        nob_cmd_append(&cmd, "./cjson");
-        if (!nob_cmd_run_sync_and_reset(&cmd)) return 1;
-      }
+        const char* param = nob_shift(argv, argc);
+        if (strcmp(param, "run") == 0) {
+            nob_cmd_append(&cmd, "./cjson");
+            if (!nob_cmd_run_sync_and_reset(&cmd)) return 1;
+        } else if (strcmp(param, "debug") == 0) {
+            nob_cmd_append(&cmd, "~/software/GF/gf2", "./cjson");
+        }
     }
 
     return 0;
