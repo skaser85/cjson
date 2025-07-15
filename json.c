@@ -186,63 +186,62 @@ Token GetToken(Nob_String_Builder sb, size_t *At) {
                            size_t idx = 0;
 
                            /*check for positive whole number*/
-                           if (is_integer(c)) {
+                           if (is_integer(c)) 
+                           {
                                is_numeric = true;
-                           } else if 
-                               /*check for negative float without initial 0*/
-                               (c == '-' && (
+                           } else if (c == '-' && (
                                              (*At+1 < sb.count && sb.items[*At+1] == '.') &&
                                              (*At+2 < sb.count && is_integer(sb.items[*At+2]))
-                                            )) {
+                                            ))
+                           /*check for negative float without initial 0*/
+                           {
+                               is_numeric = true;
+                               buffer[idx] = c;
+                               *At += 1;
+                               idx += 1;
+                               c = sb.items[*At];
+                               buffer[idx] = c;
+                               *At += 1;
+                               idx += 1;
+                               c = sb.items[*At];
+                           } else if (c == '-' && (*At+1 < sb.count && is_integer(sb.items[*At+1]))) 
+                            /*check for negative whole number*/
+                           {
                                    is_numeric = true;
                                    buffer[idx] = c;
                                    *At += 1;
                                    idx += 1;
                                    c = sb.items[*At];
-                                   buffer[idx] = c;
-                                   *At += 1;
-                                   idx += 1;
-                                   c = sb.items[*At];
-                               } else if
-                                   /*check for negative whole number*/
-                                   (c == '-' && (*At+1 < sb.count && is_integer(sb.items[*At+1]))) {
+                            } else if (c == '.' && (*At+1 < sb.count && is_integer(sb.items[*At+1]))) 
+                            /*check for positive float without initial 0*/
+                            {
                                        is_numeric = true;
                                        buffer[idx] = c;
                                        *At += 1;
                                        idx += 1;
                                        c = sb.items[*At];
-                                   } else if 
-                                       /*check for positive float without initial 0*/
-                                       (c == '.' && (*At+1 < sb.count && is_integer(sb.items[*At+1]))) {
-                                           is_numeric = true;
-                                           buffer[idx] = c;
-                                           *At += 1;
-                                           idx += 1;
-                                           c = sb.items[*At];
-                                       }
+                            }
 
-                                   if (is_numeric) {
-                                       char *buffer = malloc(sizeof(char)*2048);
-                                       size_t idx = 0;
-                                       while (*At < sb.count && 
-                                               (
-                                                is_integer(c) ||
-                                                (
-                                                 c == '.' && *At+1 < sb.count && is_integer(sb.items[*At+1])
-                                                )
-                                               )
-                                             ) {
-                                           buffer[idx] = c;
-                                           idx += 1;
-                                           *At += 1;
-                                           c = sb.items[*At];
-                                       }
-                                       if (c == ',')
-                                           *At -= 1;
-                                       t.kind = TK_FLOAT;
-                                       t.num = (float)atof(buffer);
-                                   }
-                       }
+                           if (is_numeric) {
+                               while (*At < sb.count && 
+                                       (
+                                        is_integer(c) ||
+                                        (
+                                         c == '.' && *At+1 < sb.count && is_integer(sb.items[*At+1])
+                                        )
+                                       )
+                                     ) {
+                                   buffer[idx] = c;
+                                   idx += 1;
+                                   *At += 1;
+                                   c = sb.items[*At];
+                               }
+                               if (c == ',')
+                                   *At -= 1;
+                               t.kind = TK_FLOAT;
+                               t.num = (float)atof(buffer);
+                           }
+                    }
         }
 
         *At += 1;
@@ -516,15 +515,15 @@ int main() {
 
     Tokens tokens = Tokenize(sb);
 
-    Json_Element root = ParseTokens(tokens);
+    //Json_Element root = ParseTokens(tokens);
 
-    nob_log(NOB_INFO, "%s", root.key);
+    //nob_log(NOB_INFO, "%s", root.key);
 
-    //Nob_String_Builder result = Tokens2Json(tokens);
+    Nob_String_Builder result = Tokens2Json(tokens);
 
-    //   FILE *fp = fopen("./dump.json", "w");
-    //   fprintf(fp, "%s", result.items);
-    //   fclose(fp);
+    FILE *fp = fopen("./dump.json", "w");
+    fprintf(fp, "%s", result.items);
+    fclose(fp);
 
 #if 0
     FILE *fp = fopen("./info.txt", "w");
